@@ -85,21 +85,26 @@ class PostgresSink:
 class KafkaSink:
     """Your setup: the gateways send every reading to Kafka.
 
-    TODO (Part 2, Stage C1). clients/producer.py of Part 1 shows
-    how to produce. Decide, and justify in your decision record: which topic
-    (created how?), which key, which producer settings?
+    Topic: readings, created before the first run with 6 partitions (see README).
+    Key: machine_id, so all readings of one machine go to the same partition, in order.
+    Settings: acks=all and idempotence, so a retry can not lose, duplicate or reorder
+    a reading; linger.ms batches the readings of one tick instead of sending them one by one.
     """
 
     def __init__(self, args):
         from confluent_kafka import Producer
+        self.topic = "readings"
         self.producer = Producer({
             "bootstrap.servers": args.bootstrap,
-            # TODO: more settings?
+            "acks": "all",
+            "enable.idempotence": True,
+            "linger.ms": 20,
+            # same partitioner as the Java clients (like clients/producer.py)
+            "partitioner": "murmur2_random",
         })
 
     def send(self, reading):
-        # TODO: send the reading (as JSON) to Kafka: self.producer.produce(...)
-        raise NotImplementedError("KafkaSink.send() is part of your solution (Stage C1)")
+        self.producer.produce(self.topic, key=reading["machine_id"], value=json.dumps(reading))
 
     def tick(self):
         """Called once per tick, after all readings of that tick were sent."""
